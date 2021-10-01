@@ -1,0 +1,3 @@
+[submodule "ftdi-embedded-hal"]
+	path = ftdi-embedded-hal
+	url = https://github.com/ftdi-rs/ftdi-embedded-hal
