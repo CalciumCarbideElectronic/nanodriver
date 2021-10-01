@@ -4,8 +4,13 @@ use libftd2xx::TimeoutError;
 
 #[derive(Debug)]
 pub enum IError {
-    General { msg: &'static str },
-    Timeout { source: &'static str },
+    #[allow(dead_code)]
+    General {
+        msg: &'static str,
+    },
+    Timeout {
+        source: &'static str,
+    },
 }
 
 impl Error for IError {}
@@ -20,7 +25,7 @@ impl Display for IError {
 }
 
 impl From<TimeoutError> for IError {
-    fn from(e: TimeoutError) -> Self {
+    fn from(_: TimeoutError) -> Self {
         Self::Timeout {
             source: "libftd2xx",
         }

@@ -1,10 +1,5 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    sync::Arc,
-};
-
 use embedded_hal::digital::v2::OutputPin;
-use libftd2xx::{Ft2232h, Ft4232h, Ftdi, FtdiMpsse, TimeoutError};
+use libftd2xx::Ft4232h;
 
 use crate::error::IError;
 use ftdi_embedded_hal::OutputPin as FTOutPin;
@@ -20,6 +15,8 @@ pub struct FtdiGPIOController<'a> {
 }
 
 impl<'a> FtdiGPIOController<'a> {
+    #[allow(dead_code)]
+
     fn new(pin: FTOutPin<'a, Ft4232h>) -> FtdiGPIOController<'a> {
         Self { pin }
     }

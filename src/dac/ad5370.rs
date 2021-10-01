@@ -1,7 +1,4 @@
-use std::ops::{Add, BitAnd, Deref};
-
-use apint::{ApInt, BitWidth, ShiftAmount};
-
+#![allow(dead_code)]
 use crate::{
     error::IError,
     interface::{gpio::IOController, spi::Transactional},
@@ -14,19 +11,19 @@ struct ReadResp([u8; 3]);
 
 impl ReadResp {
     fn new() -> Self {
-        return ReadResp([0; 3]);
+        ReadResp([0; 3])
     }
     fn as_mut(&mut self) -> &mut [u8] {
-        return self.0.as_mut();
+        self.0.as_mut()
     }
-    fn to_u32(&self) -> u32 {
-        return u32::from_be_bytes([0, self.0[0], self.0[1], self.0[2]]);
+    fn to_u32(self) -> u32 {
+        u32::from_be_bytes([0, self.0[0], self.0[1], self.0[2]])
     }
-    fn to_u16(&self) -> u16 {
-        return u16::from_be_bytes([self.0[1], self.0[2]]);
+    fn to_u16(self) -> u16 {
+        u16::from_be_bytes([self.0[1], self.0[2]])
     }
-    fn to_u8(&self) -> u8 {
-        return self.0[2];
+    fn to_u8(self) -> u8 {
+        self.0[2]
     }
 }
 // impl From<[u8; 3]> for u16 {
@@ -62,12 +59,12 @@ pub enum Address {
     // F7:F0 = 1, write all 1s (all channels use X2B register).
     WriteSelectAll,
 }
-impl Into<u8> for Address {
-    fn into(self) -> u8 {
-        match self {
+impl From<Address> for u8 {
+    fn from(c: Address) -> Self {
+        match c {
             Address::AllCh => 0,
             Address::SingleCh { ch, group } => ((group + 1) << 3) | ch,
-            Address::SingleGroup { group } => (0 << 3) | (group + 1),
+            Address::SingleGroup { group } => group + 1,
             Address::Chx { ch } => (6 << 3) | ch,
             Address::ChxExceptGroup0 { ch } => (7 << 3) | ch,
             Address::WriteControl => 1,
@@ -105,13 +102,13 @@ pub enum ReadBackAddr {
 }
 
 pub fn to_ch_seq(group: u8, ch: u8) -> u16 {
-    return (group * 8 + ch + 8) as u16;
+    (group * 8 + ch + 8) as u16
 }
 
-impl Into<u16> for ReadBackAddr {
-    fn into(self) -> u16 {
-        match self {
-            ReadBackAddr::X1A { group, ch } => (0_u16 << 13) | to_ch_seq(group, ch) << 7,
+impl From<ReadBackAddr> for u16 {
+    fn from(c: ReadBackAddr) -> Self {
+        match c {
+            ReadBackAddr::X1A { group, ch } => to_ch_seq(group, ch) << 7,
             ReadBackAddr::X1B { group, ch } => (1_u16 << 13) | to_ch_seq(group, ch) << 7,
 
             ReadBackAddr::C { group, ch } => (2_u16 << 13) | to_ch_seq(group, ch) << 7,
@@ -123,11 +120,13 @@ impl Into<u16> for ReadBackAddr {
         }
     }
 }
+impl Default for MainBuilder {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
 
 impl MainBuilder {
-    pub fn new() -> Self {
-        return MainBuilder(0);
-    }
     pub fn target(&mut self, mode: Mode) -> &mut Self {
         self.0 |= (mode as u32) << 22;
         self
@@ -149,16 +148,21 @@ impl MainBuilder {
     }
 }
 
-impl Into<[u8; 3]> for MainBuilder {
-    fn into(self) -> [u8; 3] {
-        return [(self.0 >> 16) as u8, (self.0 >> 8) as u8, self.0 as u8];
+impl From<MainBuilder> for [u8; 3] {
+    fn from(d: MainBuilder) -> Self {
+        [(d.0 >> 16) as u8, (d.0 >> 8) as u8, d.0 as u8]
+    }
+}
+impl From<&MainBuilder> for [u8; 3] {
+    fn from(d: &MainBuilder) -> Self {
+        [(d.0 >> 16) as u8, (d.0 >> 8) as u8, d.0 as u8]
     }
 }
 pub struct AD537xRegister {
     //Input Data Register A. One for each DAC channel.
-    pub x1A: AD5370PerChannelRegister,
+    pub x1_a: AD5370PerChannelRegister,
     //Input Data Register B. One for each DAC channel.
-    pub x1B: AD5370PerChannelRegister,
+    pub x1_b: AD5370PerChannelRegister,
 
     //Gain trim register. One for each DAC channel.
     pub gain: AD5370PerChannelRegister,
@@ -187,8 +191,8 @@ pub struct AD537xRegister {
 impl Default for AD537xRegister {
     fn default() -> Self {
         Self {
-            x1A: [0x1555; 40],
-            x1B: [0x1555; 40],
+            x1_a: [0x1555; 40],
+            x1_b: [0x1555; 40],
             gain: [0x3FFF; 40],
             offset: [0x2000; 40],
             ofs0: 0x1555,
@@ -220,51 +224,57 @@ pub struct AD5370 {
     _clr: Box<dyn IOController>,
 }
 
+#[allow(dead_code)]
 impl AD5370 {
     // On the rising
     // edge of RESET, the AD5370 state machine initiates a reset
     // sequence to reset the X, M, and C registers to their default
     // values.
-    pub fn reset(&mut self) {
-        self._reset.reset();
-        self._reset.set();
+    pub fn reset(&mut self) -> Result<(), IError> {
+        self._reset.reset()?;
+        self._reset.set()?;
+        Ok(())
     }
-    pub fn clear(&mut self) {
-        self._clr.reset();
-    }
-
-    pub fn restore_clear(&mut self) {
-        self._clr.set();
+    pub fn clear(&mut self) -> Result<(), IError> {
+        self._clr.reset()?;
+        Ok(())
     }
 
-    pub fn init(&mut self) {
-        self._reset.set();
-        self._clr.set();
-        self._ldac.reset();
+    pub fn restore_clear(&mut self) -> Result<(), IError> {
+        self._clr.set()?;
+        Ok(())
     }
-    pub fn write(&mut self, data: [u8; 3]) {
-        self.spi.spi_write(&data);
+
+    pub fn init(&mut self) -> Result<(), IError> {
+        self._reset.set()?;
+        self._clr.set()?;
+        self._ldac.reset()?;
+        Ok(())
+    }
+    pub fn write(&mut self, data: [u8; 3]) -> Result<(), IError> {
+        self.spi.spi_write(&data)?;
+        Ok(())
     }
 
     fn voltage_to_input(&self, vol: f64, group: u8, ch: u8) -> u16 {
         let vs = 0.0;
-        let K1 = (1 << 16);
-        let K2 = (1 << 15);
-        let mut ofs: u16 = match group {
+        let k1 = 1_u32 << 16_u32;
+        let k2 = 1_u16 << 15_u16;
+        let ofs: u16 = match group {
             0 => self.reg.ofs0,
             _ => self.reg.ofs1,
         };
         let idx = (group * 8 + ch) as usize;
-        let C = self.reg.offset[idx];
-        let M = self.reg.offset[idx];
+        let c = self.reg.offset[idx];
+        let m = self.reg.offset[idx];
 
-        let first_item = (vol - vs) * (K1 as f64) / (4.0 * self.vref);
-        let suffix = (4 * ofs + K2 - C) as f64;
-        let coef = (K1 / (M + 1)) as f64;
+        let first_item = (vol - vs) * (k1 as f64) / (4.0 * self.vref);
+        let suffix = (4 * ofs + k2 - c) as f64;
+        let coef = (k1 / (m + 1) as u32) as f64;
 
         let x = (first_item + suffix) * coef;
 
-        return x as u16;
+        x as u16
     }
 
     pub fn set_voltage(&mut self, vol: f64, target: Address) -> Result<(), IError> {
@@ -286,49 +296,50 @@ impl AD5370 {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn read_all(&mut self) -> Result<(), IError> {
         let mut builder = MainBuilder(0);
         for group in 0..5 {
             for ch in 0..8 {
                 let prefix: [[u8; 3]; 4] = [
-                    builder.read(ReadBackAddr::X1A { group, ch }).clone().into(),
-                    builder.read(ReadBackAddr::X1B { group, ch }).clone().into(),
-                    builder.read(ReadBackAddr::C { group, ch }).clone().into(),
-                    builder.read(ReadBackAddr::M { group, ch }).clone().into(),
+                    builder.read(ReadBackAddr::X1A { group, ch }).into(),
+                    builder.read(ReadBackAddr::X1B { group, ch }).into(),
+                    builder.read(ReadBackAddr::C { group, ch }).into(),
+                    builder.read(ReadBackAddr::M { group, ch }).into(),
                 ];
                 let mut data: [ReadResp; 4] = [ReadResp::new(); 4];
                 for item in 0..4 {
                     self.spi.spi_read(&prefix[item], data[item].as_mut())?;
                 }
-                self.reg.x1A[ch as usize] = data[0].to_u16();
-                self.reg.x1B[ch as usize] = data[1].to_u16();
+                self.reg.x1_a[ch as usize] = data[0].to_u16();
+                self.reg.x1_b[ch as usize] = data[1].to_u16();
                 self.reg.offset[ch as usize] = data[2].to_u16();
                 self.reg.gain[ch as usize] = data[3].to_u16();
             }
         }
 
-        let mut prefix: [u8; 3] = builder.read(ReadBackAddr::OFS0).clone().into();
+        let mut prefix: [u8; 3] = builder.read(ReadBackAddr::OFS0).into();
         let mut data = ReadResp::new();
         self.spi.spi_read(&prefix, data.as_mut())?;
         self.reg.ofs0 = data.to_u16();
 
-        prefix = builder.read(ReadBackAddr::OFS1).clone().into();
+        prefix = (*builder.read(ReadBackAddr::OFS1)).into();
         self.spi.spi_read(&prefix, data.as_mut())?;
-        self.reg.ofs0 = data.to_u16();
 
-        prefix = builder.read(ReadBackAddr::Control).clone().into();
         self.spi.spi_read(&prefix, data.as_mut())?;
-        self.reg.control = data.to_u8();
         Ok(())
     }
 }
 
+#[allow(clippy::unusual_byte_groupings)]
+#[allow(dead_code)]
+#[cfg(test)]
 mod test {
-    use super::{Address, MainBuilder, Mode, ReadBackAddr};
+    use super::*;
 
     #[test]
     fn test_builder() {
-        let data: [u8; 3] = MainBuilder::new()
+        let data: [u8; 3] = MainBuilder::default()
             .target(Mode::WriteData)
             .address(Address::Chx { ch: 5 })
             .data(0xA5A5)
@@ -337,7 +348,7 @@ mod test {
 
         assert_eq!([0b11_110101, 0xA5, 0xA5], data);
 
-        let data: [u8; 3] = MainBuilder::new()
+        let data: [u8; 3] = MainBuilder::default()
             .target(Mode::WriteOffset)
             .address(Address::SingleCh { group: 3, ch: 7 })
             .data(0xA5A5)
@@ -346,27 +357,27 @@ mod test {
 
         assert_eq!([0b10_100111, 0xA5, 0xA5], data);
 
-        let data: [u8; 3] = MainBuilder::new()
+        let data: [u8; 3] = MainBuilder::default()
             .read(ReadBackAddr::M { group: 4, ch: 7 })
             .to_owned()
             .into();
 
         assert_eq!([0b00_000101, 0b011_10111, 0b1000_0000], data);
 
-        let data: [u8; 3] = MainBuilder::new()
+        let data: [u8; 3] = MainBuilder::default()
             .read(ReadBackAddr::Select { group: 3 })
             .to_owned()
             .into();
 
         assert_eq!([0b00_000101, 0b100_00100, 0b1000_0000], data);
 
-        let data: [u8; 3] = MainBuilder::new()
+        let data: [u8; 3] = MainBuilder::default()
             .read(ReadBackAddr::OFS0)
             .to_owned()
             .into();
         assert_eq!([0b00_000101, 0b100_00001, 0b0000_0000], data);
 
-        let data: [u8; 3] = MainBuilder::new()
+        let data: [u8; 3] = MainBuilder::default()
             .read(ReadBackAddr::X1A { group: 2, ch: 2 })
             .to_owned()
             .into();
