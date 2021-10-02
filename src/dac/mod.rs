@@ -1,1 +1,1 @@
-pub mod ad5370;
+pub mod ad537x;
