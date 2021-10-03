@@ -17,7 +17,7 @@ pub trait Transactional {
 }
 
 pub struct FtdiSPIController {
-    _ft: Arc<FtHal<Ft4232h, Initialized>>,
+    pub(crate) _ft: Arc<FtHal<Ft4232h, Initialized>>,
 }
 //
 

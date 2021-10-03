@@ -2,6 +2,7 @@
 use super::{
     builder::*,
     reg::{ReadBackAddr, Register},
+    ReadResp,
 };
 
 use crate::{
@@ -11,48 +12,22 @@ use crate::{
 
 use super::reg::{ChannelAddress, WriteMode};
 
-#[derive(Clone, Copy)]
-struct ReadResp([u8; 3]);
-
-impl ReadResp {
-    fn new() -> Self {
-        ReadResp([0; 3])
-    }
-    fn as_mut(&mut self) -> &mut [u8] {
-        self.0.as_mut()
-    }
-    fn to_u32(self) -> u32 {
-        u32::from_be_bytes([0, self.0[0], self.0[1], self.0[2]])
-    }
-    fn to_u16(self) -> u16 {
-        u16::from_be_bytes([self.0[1], self.0[2]])
-    }
-    fn to_u8(self) -> u8 {
-        self.0[2]
-    }
-}
-
 pub struct AD5370 {
     pub vref: f64,
-    reg: Register,
-    spi: Box<dyn Transactional>,
+    pub reg: Register,
+    pub spi: Box<dyn Transactional>,
     ///BUSY Input/Output (Active Low). BUSY is open-drain when an output.
     ///See the BUSY and LDAC Functions section for more information
-    _busy: Box<dyn IOController>,
+    pub _busy: Box<dyn IOController>,
     //Load DAC Logic Input (Active Low).
-    _ldac: Box<dyn IOController>,
+    pub _ldac: Box<dyn IOController>,
     //Digital Reset Input
-    _reset: Box<dyn IOController>,
-    ///Active Low Input.
-    ///This is the frame synchronization signal for the serial interface.
-    ///See the Timing Characteristics section for more details.
-    _sync: Box<dyn IOController>,
+    pub _reset: Box<dyn IOController>,
     ///Asynchronous Clear Input (Level Sensitive, Active Low).
     ///See the Clear Function section for more information
-    _clr: Box<dyn IOController>,
+    pub _clr: Box<dyn IOController>,
 }
 
-#[allow(dead_code)]
 impl AD5370 {
     pub fn get_reg(&self) -> Register {
         self.reg

@@ -14,3 +14,6 @@ embedded-hal = "0.2.6"
 ftdi-embedded-hal= { path = "./ftdi-embedded-hal" }
 
 
+[[bin]]
+name = "fdti_test"
+path = "src/utils/test.rs"
