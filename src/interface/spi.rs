@@ -7,7 +7,7 @@ use libftd2xx::Ft4232h;
 
 use crate::error::IError;
 
-pub trait Transactional {
+pub trait Transactional: Send + Sync {
     /// Read writes the prefix buffer then reads into the input buffer
     /// Note that the values of the input buffer will also be output, because, SPI...
     fn spi_read(&mut self, prefix: &[u8], data: &mut [u8]) -> Result<(), IError>;
@@ -21,6 +21,8 @@ pub struct FtdiSPIController {
 }
 //
 
+unsafe impl Send for FtdiSPIController {}
+unsafe impl Sync for FtdiSPIController {}
 impl Transactional for FtdiSPIController {
     fn spi_read(&mut self, prefix: &[u8], data: &mut [u8]) -> Result<(), IError> {
         let mut spi: hal::Spi<_> = self._ft.spi()?;

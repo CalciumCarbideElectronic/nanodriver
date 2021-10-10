@@ -5,8 +5,7 @@ use libftd2xx::Ft4232h;
 
 use crate::error::IError;
 use ftdi_embedded_hal::{FtHal, Initialized, OutputPin as FtOutPin};
-
-pub trait IOController {
+pub trait IOController: Send + Sync {
     fn set(&mut self) -> Result<(), IError>;
     fn reset(&mut self) -> Result<(), IError>;
     // fn read(&mut self) -> Result<bool, IError>;
@@ -25,43 +24,42 @@ pub enum Pin {
 }
 
 #[allow(dead_code)]
-pub struct FtdiGPIOController {
-    pub(crate) _ft: Arc<FtHal<Ft4232h, Initialized>>,
-    pin: Pin,
+pub struct FtdiGPIOController<'b> {
+    // pub(crate) _ft: Arc<FtHal<Ft4232h, Initialized>>,
+
+    // pin: Pin,
+    // pub(crate) _pin: Box<dyn for<'a> Fn(&'a FtHal<Ft4232h, Initialized>) -> FtOutPin<'a, Ft4232h>>,
+    pub(crate) _pin: FtOutPin<'b, Ft4232h>, // _phantom: &'a PhantomData<()>,
 }
+unsafe impl<'a> Send for FtdiGPIOController<'a> {}
+unsafe impl<'a> Sync for FtdiGPIOController<'a> {}
 
-impl FtdiGPIOController {
-    // #[allow(dead_code)]
-
-    pub fn new(_ft: Arc<FtHal<Ft4232h, Initialized>>, pin: Pin) -> FtdiGPIOController {
-        Self { _ft, pin }
+type PinFactory = Box<dyn for<'b> Fn(&'b FtHal<Ft4232h, Initialized>) -> FtOutPin<'b, Ft4232h>>;
+impl<'a> FtdiGPIOController<'a> {
+    pub fn new(
+        _ft: &'a Arc<FtHal<Ft4232h, Initialized>>,
+        _pin_fn: PinFactory,
+    ) -> FtdiGPIOController<'a> {
+        let _pin = _pin_fn(_ft);
+        Self { _pin }
     }
-    fn _pin(&self) -> FtOutPin<Ft4232h> {
-        match self.pin {
-            Pin::AD0 => self._ft.ad0(),
-            Pin::AD1 => self._ft.ad1(),
-            Pin::AD2 => self._ft.ad2(),
-            Pin::AD3 => self._ft.ad2(),
-            Pin::AD4 => self._ft.ad2(),
-            Pin::AD5 => self._ft.ad2(),
-            Pin::AD6 => self._ft.ad2(),
-            Pin::AD7 => self._ft.ad2(),
-        }
+    pub fn new_boxed(
+        _ft: &'a Arc<FtHal<Ft4232h, Initialized>>,
+        _pin: PinFactory,
+    ) -> Box<FtdiGPIOController<'a>> {
+        Box::new(Self::new(_ft, _pin))
     }
 }
+impl<'a> FtdiGPIOController<'a> {}
 
-impl IOController for FtdiGPIOController {
+impl<'a> IOController for FtdiGPIOController<'a> {
     fn set(&mut self) -> Result<(), IError> {
-        self._pin().set_high()?;
+        self._pin.set_high()?;
         Ok(())
     }
 
     fn reset(&mut self) -> Result<(), IError> {
-        self._pin().set_low()?;
+        self._pin.set_low()?;
         Ok(())
     }
-
-    // fn read(&mut self) -> Result<bool, IError> {
-    // 	self.pin.
-    // }
 }

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use dac::ad537x::driver::AD5370;
+use hal::{FtHal, Initialized};
 
-use interface::gpio::Pin;
 use interface::spi::FtdiSPIController;
 
 // #[macro_use]
@@ -10,28 +9,47 @@ extern crate ftdi_mpsse;
 mod dac;
 mod error;
 mod interface;
+mod svc;
 use ftdi_embedded_hal as hal;
+use libftd2xx::Ft4232h;
 
-use crate::{dac::ad537x::reg::Register, interface::gpio::FtdiGPIOController};
+use crate::interface::gpio::FtdiGPIOController;
+use actix_web::{middleware, App, HttpServer};
 
 /// Transaction enum defines possible SPI transactions
-
-fn main() {
-    let ftdi = hal::Ft4232hHal::new()
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let ftdi: FtHal<Ft4232h, Initialized> = hal::Ft4232hHal::new()
         .expect("Failed to open FT232H device")
         .init_default()
         .expect("Failed to initialize MPSSE");
 
     let h = Arc::new(ftdi);
-    let spi = FtdiSPIController { _ft: h.clone() };
+    let _spi = Box::new(FtdiSPIController { _ft: h.clone() });
+    let mut _busy = FtdiGPIOController::new_boxed(&h, Box::new(|h| h.ad4()));
+    let mut _ldac = FtdiGPIOController::new_boxed(&h, Box::new(|h| h.ad5()));
+    let mut _reset = FtdiGPIOController::new_boxed(&h, Box::new(|h| h.ad6()));
+    let mut _clr = FtdiGPIOController::new_boxed(&h, Box::new(|h| h.ad7()));
 
-    let _ad5370 = AD5370 {
-        vref: 4.0,
-        reg: Register::default(),
-        spi: Box::new(spi),
-        _busy: Box::new(FtdiGPIOController::new(h.clone(), Pin::AD0)),
-        _ldac: Box::new(FtdiGPIOController::new(h.clone(), Pin::AD1)),
-        _reset: Box::new(FtdiGPIOController::new(h.clone(), Pin::AD2)),
-        _clr: Box::new(FtdiGPIOController::new(h, Pin::AD3)),
-    };
+    // let state = Arc::new(AD5370 {
+    //     vref: 4.0,
+    //     reg: Register::default(),
+    //     spi,
+    //     _busy,
+    //     _ldac,
+    //     _reset,
+    //     _clr,
+    // });
+
+    HttpServer::new(move || {
+        App::new()
+            .wrap(middleware::Logger::default())
+            // .data(state.clone())
+            .service(svc::ping)
+            .service(svc::voltage)
+    })
+    .bind("127.0.0.1:8080")?
+    .run()
+    .await
+    // todo!()
 }

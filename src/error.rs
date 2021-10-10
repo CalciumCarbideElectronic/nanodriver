@@ -1,5 +1,6 @@
 use std::{error::Error, fmt::Display};
 
+use actix_web::ResponseError;
 use libftd2xx::TimeoutError;
 
 #[derive(Debug)]
@@ -29,5 +30,11 @@ impl From<TimeoutError> for IError {
         Self::Timeout {
             source: "libftd2xx",
         }
+    }
+}
+
+impl ResponseError for IError {
+    fn status_code(&self) -> actix_web::http::StatusCode {
+        actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
     }
 }

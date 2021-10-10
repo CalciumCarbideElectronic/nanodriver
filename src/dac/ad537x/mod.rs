@@ -1,8 +1,13 @@
+use std::marker::{Send, Sync};
+
+use self::driver::AD5370;
+
 pub mod builder;
 pub mod driver;
 pub mod reg;
 mod utils;
 
+pub type Instance<'a> = AD5370<'a>;
 type AD5370PerChannelRegister = [u16; 40];
 #[derive(Clone, Copy)]
 struct ReadResp([u8; 3]);
@@ -25,3 +30,12 @@ impl ReadResp {
         self.0[2]
     }
 }
+
+// impl From<AD5370> for Instance {
+//     fn from(d: AD5370) -> Self {
+//         return Mutex::new(d);
+//     }
+// }
+pub enum Action {}
+unsafe impl Send for Action {}
+unsafe impl Sync for Action {}

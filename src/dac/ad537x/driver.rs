@@ -12,23 +12,23 @@ use crate::{
 
 use super::reg::{ChannelAddress, WriteMode};
 
-pub struct AD5370 {
+pub struct AD5370<'a> {
     pub vref: f64,
     pub reg: Register,
-    pub spi: Box<dyn Transactional>,
+    pub spi: Box<dyn Transactional + 'a>,
     ///BUSY Input/Output (Active Low). BUSY is open-drain when an output.
     ///See the BUSY and LDAC Functions section for more information
-    pub _busy: Box<dyn IOController>,
+    pub _busy: Box<dyn IOController + 'a>,
     //Load DAC Logic Input (Active Low).
-    pub _ldac: Box<dyn IOController>,
+    pub _ldac: Box<dyn IOController + 'a>,
     //Digital Reset Input
-    pub _reset: Box<dyn IOController>,
+    pub _reset: Box<dyn IOController + 'a>,
     ///Asynchronous Clear Input (Level Sensitive, Active Low).
     ///See the Clear Function section for more information
-    pub _clr: Box<dyn IOController>,
+    pub _clr: Box<dyn IOController + 'a>,
 }
 
-impl AD5370 {
+impl<'a> AD5370<'a> {
     pub fn get_reg(&self) -> Register {
         self.reg
     }
