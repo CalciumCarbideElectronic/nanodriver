@@ -21,6 +21,8 @@ once_cell = "1.8.0"
 
 [lib]
 name = "nanodriver"
+crate-type = ["cdylib"]
+
 path = "src/lib.rs"
 
 
