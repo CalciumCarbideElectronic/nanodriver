@@ -1,10 +1,12 @@
 use std::marker::{Send, Sync};
 
+
 use self::driver::AD5370;
 
 pub mod builder;
 pub mod driver;
 pub mod reg;
+pub mod labview;
 mod utils;
 
 pub type Instance<'a> = AD5370<'a>;

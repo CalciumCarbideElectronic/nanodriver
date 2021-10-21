@@ -2,7 +2,7 @@ use std::borrow::BorrowMut;
 
 use super::reg::{ChannelAddress, ReadBackAddr, SpecialFunctionAddress, WriteMode};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct MainBuilder(u32);
 #[derive(Copy, Clone)]
 pub struct WriteBuilder(u32);
@@ -17,12 +17,6 @@ pub trait Builder {
     fn build(&mut self) -> [u8; 3] {
         let d = *(self.raw());
         [(d >> 16) as u8, (d >> 8) as u8, d as u8]
-    }
-}
-
-impl Default for MainBuilder {
-    fn default() -> MainBuilder {
-        MainBuilder(0)
     }
 }
 
