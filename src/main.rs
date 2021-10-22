@@ -10,6 +10,8 @@ mod dac;
 mod error;
 mod interface;
 mod svc;
+mod test;
+mod global;
 
 
 

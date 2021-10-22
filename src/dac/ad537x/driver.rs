@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use std::{thread::sleep, time::Duration};
+
 use super::{
     builder::*,
     reg::{ReadBackAddr, Register},
@@ -52,9 +54,13 @@ impl<'a> AD5370<'a> {
     }
 
     pub fn init(&mut self) -> Result<(), IError> {
-        self._reset.set()?;
+        //TODO: use button on the EVAL board for now. please keep LK3 connected.
+        // self._reset.reset();
+        // sleep(Duration::from_millis(1));
+        // self._reset.set()?;
+
         self._clr.set()?;
-        self._ldac.reset()?;
+        self._ldac.set()?;
         Ok(())
     }
     pub fn write_raw(&mut self, data: [u8; 3]) -> Result<(), IError> {
@@ -72,17 +78,27 @@ impl<'a> AD5370<'a> {
         };
         let idx = (group * 8 + ch) as usize;
         let c = self.reg.offset[idx];
-        let m = self.reg.offset[idx];
+        let m = self.reg.gain[idx];
 
         let first_item = (vol - vs) * (k1 as f64) / (4.0 * self.vref);
         let suffix = (4 * ofs + k2 - c) as f64;
         let coef = (k1 / (m + 1) as u32) as f64;
 
-        let x = (first_item + suffix) * coef;
+        let x = ((first_item + suffix) * coef).round() as u16;
 
-        x as u16
+        x
     }
 
+    pub fn set_code(&mut self, code: u16, target: ChannelAddress) -> Result<(), IError> {
+        let data = MainBuilder::default()
+            .write(WriteMode::Data)
+            .address(target)
+            .data(code)
+            .build();
+
+        self.spi.spi_write(&data)?;
+        Ok(())
+    }
     pub fn set_voltage(&mut self, vol: f64, target: ChannelAddress) -> Result<(), IError> {
         let (g, c) = match target {
             ChannelAddress::AllCh => (0, 0),
@@ -96,10 +112,21 @@ impl<'a> AD5370<'a> {
             .address(target)
             .data(self.voltage_to_input(vol, g, c))
             .build();
+
+        println!("set voltage: write data {:?}", data);
         self.spi.spi_write(&data)?;
         Ok(())
     }
 
+    pub fn set_offset(&mut self, value: u16) -> Result<(), IError> {
+        let data = MainBuilder::default()
+            .write(WriteMode::Offset)
+            .address(ChannelAddress::AllCh)
+            .data(value)
+            .build();
+
+        self.spi.spi_write(&data)
+    }
     #[allow(dead_code)]
     pub fn read_all(&mut self) -> Result<(), IError> {
         let mut builder = MainBuilder::default();
@@ -112,8 +139,13 @@ impl<'a> AD5370<'a> {
                     builder.read(ReadBackAddr::M { group, ch }).build(),
                 ];
                 let mut data: [ReadResp; 4] = [ReadResp::new(); 4];
+                let name = ["X1A", "X1B", "C", "M"];
                 for item in 0..4 {
                     self.spi.spi_read(&prefix[item], data[item].as_mut())?;
+                    println!(
+                        "read reg (group:{},ch:{}){} , value:{:}",
+                        group, ch, name[item], &data[item]
+                    );
                 }
                 self.reg.x1_a[ch as usize] = data[0].to_u16();
                 self.reg.x1_b[ch as usize] = data[1].to_u16();
@@ -122,13 +154,17 @@ impl<'a> AD5370<'a> {
             }
         }
 
-        let mut prefix: [u8; 3] = builder.read(ReadBackAddr::OFS0).build();
         let mut data = ReadResp::new();
+
+        let mut prefix: [u8; 3] = builder.read(ReadBackAddr::OFS0).build();
         self.spi.spi_read(&prefix, data.as_mut())?;
         self.reg.ofs0 = data.to_u16();
+        println!("read reg ofs0, value:{:}", &data);
 
         prefix = (*builder.read(ReadBackAddr::OFS1)).build();
         self.spi.spi_read(&prefix, data.as_mut())?;
+        self.reg.ofs1 = data.to_u16();
+        println!("read reg ofs1, value:{:}", &data);
 
         self.spi.spi_read(&prefix, data.as_mut())?;
         Ok(())

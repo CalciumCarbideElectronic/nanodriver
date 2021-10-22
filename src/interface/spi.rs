@@ -1,6 +1,9 @@
 
+use std::{thread::sleep, time::Duration};
 
-use embedded_hal::prelude::{_embedded_hal_blocking_spi_Write, _embedded_hal_spi_FullDuplex};
+use ftdi_embedded_hal::OutputPin as FtOutPin;
+
+use embedded_hal::{digital::v2::OutputPin, prelude::{_embedded_hal_blocking_spi_Write, _embedded_hal_spi_FullDuplex}};
 use ftdi_embedded_hal as hal;
 use hal::{FtHal, Initialized};
 use libftd2xx::Ft4232h;
@@ -18,7 +21,8 @@ pub trait Transactional: Send + Sync {
 }
 
 pub struct FtdiSPIController {
-    pub(crate) _ft: &'static Lazy<FtHal<Ft4232h, Initialized>>,
+    pub(crate) _spi: hal::Spi<'static,Ft4232h>, 
+    pub(crate) _cs:  FtOutPin<'static, Ft4232h>, 
 }
 //
 
@@ -26,19 +30,31 @@ unsafe impl Send for FtdiSPIController {}
 unsafe impl Sync for FtdiSPIController {}
 impl Transactional for FtdiSPIController {
     fn spi_read(&mut self, prefix: &[u8], data: &mut [u8]) -> Result<(), IError> {
-        let g = self._ft;
-        let mut spi: hal::Spi<_> = g.spi()?;
-        spi.write(prefix)?;
+
+        println!("spi read: prefix: {:?}", prefix);
+        self._cs.set_low();
+        
+        self._spi.write(prefix)?;
+
+        self._cs.set_high();
+
+        //AD5370 t21 guard
+
+        self._cs.set_low();
+
         for d in data.iter_mut() {
-            *d = spi.read().unwrap();
+            *d = self._spi.read().unwrap();
         }
+
+        self._cs.set_high();
         Ok(())
     }
 
     fn spi_write(&mut self, data: &[u8]) -> Result<(), IError> {
-        let g = self._ft;
-        let mut spi: hal::Spi<_> = g.spi()?;
-        spi.write(data)?;
+        println!("spi write: {:X?}",data);
+        self._cs.set_low();
+        self._spi.write(data)?;
+        self._cs.set_high();
         Ok(())
     }
 }

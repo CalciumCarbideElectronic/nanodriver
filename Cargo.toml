@@ -28,6 +28,3 @@ path = "src/lib.rs"
 
 
 
-[[bin]]
-name = "fdti_test"
-path = "src/utils/test.rs"

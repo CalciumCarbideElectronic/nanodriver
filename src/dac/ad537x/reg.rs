@@ -106,7 +106,7 @@ impl Default for Register {
             x1_a: [0x1555; 40],
             x1_b: [0x1555; 40],
             gain: [0x3FFF; 40],
-            offset: [0x2000; 40],
+            offset: [32768; 40],
             ofs0: 0x1555,
             ofs1: 0x1555,
             control: 0x00,

@@ -1,4 +1,4 @@
-use std::marker::{Send, Sync};
+use std::{fmt::Display, marker::{Send, Sync}};
 
 
 use self::driver::AD5370;
@@ -11,8 +11,14 @@ mod utils;
 
 pub type Instance<'a> = AD5370<'a>;
 type AD5370PerChannelRegister = [u16; 40];
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,Debug)]
 struct ReadResp([u8; 3]);
+
+impl Display for ReadResp{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"0x{:02X}{:02X}{:02X}",self.0[0],self.0[1],self.0[2])
+    }
+}
 
 #[allow(dead_code)]
 impl ReadResp {
