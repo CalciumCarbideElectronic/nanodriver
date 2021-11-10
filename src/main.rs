@@ -1,19 +1,11 @@
-
-
-
-
-
-
 // #[macro_use]
 extern crate ftdi_mpsse;
 mod dac;
 mod error;
+mod global;
 mod interface;
 mod svc;
 mod test;
-mod global;
-
-
 
 use actix_web::{middleware, App, HttpServer};
 

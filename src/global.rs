@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
 use crate::{
     dac::ad537x::{driver::AD5370, reg::Register},
     interface::gpio::FtdiGPIOController,
@@ -29,14 +29,14 @@ pub static FTDI: Lazy<FtHal<Ft4232h, Initialized>> = Lazy::new(|| {
 });
 
 pub static GLOBAL_AD5370: Lazy<Mutex<AD5370>> = Lazy::new(|| {
-    let mut _spi= FTDI.spi().unwrap();
+    let mut _spi = FTDI.spi().unwrap();
     _spi.set_clock_polarity(Polarity::IdleLow);
-    
+
     let mut spi = Box::new(FtdiSPIController {
         _spi,
-        _cs: FTDI.ad3()
+        _cs: FTDI.ad3(),
     });
-    spi._cs.set_high();
+    spi._cs.set_high().unwrap();
     let mut _busy = FtdiGPIOController::new_boxed(FTDI.ad4());
     let mut _ldac = FtdiGPIOController::new_boxed(FTDI.ad5());
     let mut _reset = FtdiGPIOController::new_boxed(FTDI.ad6());
@@ -50,6 +50,6 @@ pub static GLOBAL_AD5370: Lazy<Mutex<AD5370>> = Lazy::new(|| {
         _reset,
         _clr,
     };
-    t.init();
+    t.init().unwrap();
     Mutex::new(t)
 });

@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use std::{thread::sleep, time::Duration};
 
 use super::{
     builder::*,
@@ -84,9 +83,7 @@ impl<'a> AD5370<'a> {
         let suffix = (4 * ofs + k2 - c) as f64;
         let coef = (k1 / (m + 1) as u32) as f64;
 
-        let x = ((first_item + suffix) * coef).round() as u16;
-
-        x
+        ((first_item + suffix) * coef).round() as u16
     }
 
     pub fn set_code(&mut self, code: u16, target: ChannelAddress) -> Result<(), IError> {
