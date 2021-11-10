@@ -121,9 +121,9 @@ impl<'a> AD5370<'a> {
             .address(ChannelAddress::AllCh)
             .data(value)
             .build();
-
         self.spi.spi_write(&data)
     }
+
     #[allow(dead_code)]
     pub fn read_all(&mut self) -> Result<(), IError> {
         let mut builder = MainBuilder::default();
