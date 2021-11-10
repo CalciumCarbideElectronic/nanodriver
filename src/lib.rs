@@ -37,7 +37,7 @@ pub unsafe extern "C" fn set_code_to_all(code: u16) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn start(_code: u16) -> u32 {
     let (tx, rx) = mpsc::channel();
-    let _sin_exec = SinExeciter::new(rx);
+    let mut _sin_exec = SinExeciter::new(rx);
 
     let _h = thread::spawn(move || loop {
         _sin_exec.run()
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn stop(_code: u16) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn set_voltage(channel: u8, code: u16) -> u32 {
     if let Some(h) = TERMINATE_SENDER.as_mut() {
-        h.send(Action::SetAmp { channel, code }).unwrap();
+        h.send(Action::SetAmp { channel, code }).unwrap_or_default();
         TERMINATE_SENDER.take();
     }
     0
@@ -75,7 +75,8 @@ pub unsafe extern "C" fn set_voltage(channel: u8, code: u16) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn set_freq(channel: u8, freq: u64) -> u32 {
     if let Some(h) = TERMINATE_SENDER.as_mut() {
-        h.send(Action::SetFreq { channel, freq }).unwrap();
+        h.send(Action::SetFreq { channel, freq })
+            .unwrap_or_default();
         TERMINATE_SENDER.take();
     }
     1
