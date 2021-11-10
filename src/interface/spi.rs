@@ -28,7 +28,6 @@ unsafe impl Send for FtdiSPIController {}
 unsafe impl Sync for FtdiSPIController {}
 impl Transactional for FtdiSPIController {
     fn spi_read(&mut self, prefix: &[u8], data: &mut [u8]) -> Result<(), IError> {
-        println!("spi read: prefix: {:?}", prefix);
         self._cs.set_low().unwrap();
 
         self._spi.write(prefix)?;
@@ -48,7 +47,6 @@ impl Transactional for FtdiSPIController {
     }
 
     fn spi_write(&mut self, data: &[u8]) -> Result<(), IError> {
-        println!("spi write: {:X?}", data);
         self._cs.set_low().unwrap();
         self._spi.write(data)?;
         self._cs.set_high().unwrap();

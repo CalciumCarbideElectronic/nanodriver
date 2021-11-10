@@ -81,7 +81,7 @@ impl<'a> AD5370<'a> {
 
         let first_item = (vol - vs) * (k1 as f64) / (4.0 * self.vref);
         let suffix = (4 * ofs + k2 - c) as f64;
-        let coef = (k1 / (m + 1) as u32) as f64;
+        let coef = (k1 as f64/ (m + 1) as f64) as f64;
 
         ((first_item + suffix) * coef).round() as u16
     }
@@ -92,6 +92,14 @@ impl<'a> AD5370<'a> {
             .address(target)
             .data(code)
             .build();
+        
+        //11_00 0000_
+        // let data =[
+        //     0b1100_0000,
+        //     (code>>8) as u8,
+        //     code as u8
+        // ];
+        
 
         self.spi.spi_write(&data)?;
         Ok(())
@@ -113,6 +121,15 @@ impl<'a> AD5370<'a> {
         println!("set voltage: write data {:?}", data);
         self.spi.spi_write(&data)?;
         Ok(())
+    }
+
+    pub fn set_gain(&mut self, value: u16) -> Result<(), IError> {
+        let data = MainBuilder::default()
+            .write(WriteMode::Gain)
+            .address(ChannelAddress::AllCh)
+            .data(value)
+            .build();
+        self.spi.spi_write(&data)
     }
 
     pub fn set_offset(&mut self, value: u16) -> Result<(), IError> {

@@ -6,6 +6,8 @@ mod global;
 mod interface;
 mod svc;
 mod test;
+mod sin;
+mod log;
 
 use actix_web::{middleware, App, HttpServer};
 
