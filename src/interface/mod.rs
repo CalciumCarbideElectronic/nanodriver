@@ -1,2 +1,2 @@
-pub mod gpio;
-pub mod spi;
+pub mod ftdi;
+pub mod raspberry;

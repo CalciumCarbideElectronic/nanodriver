@@ -6,22 +6,22 @@ use super::{
     ReadResp,
 };
 
+use super::reg::{ChannelAddress, WriteMode};
 use crate::{
     error::IError,
-    interface::{gpio::IOController, spi::Transactional},
+    interface::ftdi::{gpio::IOController, spi::Transactional},
 };
-
-use super::reg::{ChannelAddress, WriteMode};
 
 pub struct AD5370<'a> {
     pub vref: f64,
     pub reg: Register,
+    pub _spi: Box<dyn embedded_hal::spi>,
     pub spi: Box<dyn Transactional + 'a>,
     ///BUSY Input/Output (Active Low). BUSY is open-drain when an output.
     ///See the BUSY and LDAC Functions section for more information
-    pub _busy: Box<dyn IOController + 'a>,
+    pub _busy: Box<dyn OutputPin>,
     //Load DAC Logic Input (Active Low).
-    pub _ldac: Box<dyn IOController + 'a>,
+    pub _ldac: Box<dyn OutputPin>,
     //Digital Reset Input
     pub _reset: Box<dyn IOController + 'a>,
     ///Asynchronous Clear Input (Level Sensitive, Active Low).
@@ -81,7 +81,7 @@ impl<'a> AD5370<'a> {
 
         let first_item = (vol - vs) * (k1 as f64) / (4.0 * self.vref);
         let suffix = (4 * ofs + k2 - c) as f64;
-        let coef = (k1 as f64/ (m + 1) as f64) as f64;
+        let coef = (k1 as f64 / (m + 1) as f64) as f64;
 
         ((first_item + suffix) * coef).round() as u16
     }
@@ -92,14 +92,13 @@ impl<'a> AD5370<'a> {
             .address(target)
             .data(code)
             .build();
-        
+
         //11_00 0000_
         // let data =[
         //     0b1100_0000,
         //     (code>>8) as u8,
         //     code as u8
         // ];
-        
 
         self.spi.spi_write(&data)?;
         Ok(())

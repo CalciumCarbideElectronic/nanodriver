@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use crate::{
     dac::ad537x::{driver::AD5370, reg::Register},
-    interface::gpio::FtdiGPIOController,
-    interface::spi::FtdiSPIController,
+    interface::ftdi::gpio::FtdiGPIOController,
+    interface::ftdi::spi::FtdiSPIController,
     log::log,
     sin::{Action, SinExeciter},
 };
