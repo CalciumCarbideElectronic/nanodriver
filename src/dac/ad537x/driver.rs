@@ -1,5 +1,11 @@
 #![allow(dead_code)]
 
+use std::convert::Infallible;
+
+use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::spi::FullDuplex;
+use libftd2xx::TimeoutError;
+
 use super::{
     builder::*,
     reg::{ReadBackAddr, Register},
@@ -7,86 +13,45 @@ use super::{
 };
 
 use super::reg::{ChannelAddress, WriteMode};
-use crate::{
-    error::IError,
-    interface::ftdi::{gpio::IOController, spi::Transactional},
-};
+use crate::error::IError;
 
-pub struct AD5370<'a> {
+pub type AD5370FDTD = AD5370<TimeoutError, Infallible>;
+pub type AD5370RP = AD5370<rppal::spi::Error, Infallible>;
+
+pub struct AD5370<E, R>
+where
+    IError: From<E>,
+    IError: From<R>,
+{
     pub vref: f64,
     pub reg: Register,
-    pub _spi: Box<dyn embedded_hal::spi>,
-    pub spi: Box<dyn Transactional + 'a>,
+    pub _spi: Box<dyn FullDuplex<u8, Error = E> + Send>,
     ///BUSY Input/Output (Active Low). BUSY is open-drain when an output.
     ///See the BUSY and LDAC Functions section for more information
-    pub _busy: Box<dyn OutputPin>,
+    pub _busy: Box<dyn InputPin<Error = R> + Send>,
     //Load DAC Logic Input (Active Low).
-    pub _ldac: Box<dyn OutputPin>,
+    pub _ldac: Box<dyn OutputPin<Error = R> + Send>,
     //Digital Reset Input
-    pub _reset: Box<dyn IOController + 'a>,
+    pub _reset: Box<dyn OutputPin<Error = R> + Send>,
     ///Asynchronous Clear Input (Level Sensitive, Active Low).
     ///See the Clear Function section for more information
-    pub _clr: Box<dyn IOController + 'a>,
+    pub _clr: Box<dyn OutputPin<Error = R> + Send>,
 }
 
-impl<'a> AD5370<'a> {
-    pub fn get_reg(&self) -> Register {
-        self.reg
-    }
-    // On the rising
-    // edge of RESET, the AD5370 state machine initiates a reset
-    // sequence to reset the X, M, and C registers to their default
-    // values.
-    pub fn reset(&mut self) -> Result<(), IError> {
-        self._reset.reset()?;
-        self._reset.set()?;
-        Ok(())
-    }
-    pub fn clear(&mut self) -> Result<(), IError> {
-        self._clr.reset()?;
-        Ok(())
-    }
+pub trait AD5370Instance: Send {
+    fn init(&mut self) -> Result<(), IError>;
+    fn reset(&mut self) -> Result<(), IError>;
+    fn clear(&mut self) -> Result<(), IError>;
+    fn set_ldac(&mut self) -> Result<(), IError>;
 
-    pub fn restore_clear(&mut self) -> Result<(), IError> {
-        self._clr.set()?;
-        Ok(())
-    }
+    fn clear_ldac(&mut self) -> Result<(), IError>;
 
-    pub fn init(&mut self) -> Result<(), IError> {
-        //TODO: use button on the EVAL board for now. please keep LK3 connected.
-        // self._reset.reset();
-        // sleep(Duration::from_millis(1));
-        // self._reset.set()?;
+    fn get_reg(&self) -> Register;
+    fn get_vref(&self) -> f64;
+    fn send_data(&mut self, data: &[u8; 3]) -> Result<(), IError>;
+    fn read_register(&mut self, addr: &[u8; 3], dest: &mut [u8]) -> Result<(), IError>;
 
-        self._clr.set()?;
-        self._ldac.set()?;
-        Ok(())
-    }
-    pub fn write_raw(&mut self, data: [u8; 3]) -> Result<(), IError> {
-        self.spi.spi_write(&data)?;
-        Ok(())
-    }
-
-    fn voltage_to_input(&self, vol: f64, group: u8, ch: u8) -> u16 {
-        let vs = 0.0;
-        let k1 = 1_u32 << 16_u32;
-        let k2 = 1_u16 << 15_u16;
-        let ofs: u16 = match group {
-            0 => self.reg.ofs0,
-            _ => self.reg.ofs1,
-        };
-        let idx = (group * 8 + ch) as usize;
-        let c = self.reg.offset[idx];
-        let m = self.reg.gain[idx];
-
-        let first_item = (vol - vs) * (k1 as f64) / (4.0 * self.vref);
-        let suffix = (4 * ofs + k2 - c) as f64;
-        let coef = (k1 as f64 / (m + 1) as f64) as f64;
-
-        ((first_item + suffix) * coef).round() as u16
-    }
-
-    pub fn set_code(&mut self, code: u16, target: ChannelAddress) -> Result<(), IError> {
+    fn set_code(&mut self, code: u16, target: ChannelAddress) -> Result<(), IError> {
         let data = MainBuilder::default()
             .write(WriteMode::Data)
             .address(target)
@@ -100,10 +65,10 @@ impl<'a> AD5370<'a> {
         //     code as u8
         // ];
 
-        self.spi.spi_write(&data)?;
+        self.send_data(&data)?;
         Ok(())
     }
-    pub fn set_voltage(&mut self, vol: f64, target: ChannelAddress) -> Result<(), IError> {
+    fn set_voltage(&mut self, vol: f64, target: ChannelAddress) -> Result<(), IError> {
         let (g, c) = match target {
             ChannelAddress::AllCh => (0, 0),
             ChannelAddress::SingleCh { ch, group } => (group, ch),
@@ -118,31 +83,54 @@ impl<'a> AD5370<'a> {
             .build();
 
         println!("set voltage: write data {:?}", data);
-        self.spi.spi_write(&data)?;
+        self.send_data(&data)?;
         Ok(())
     }
 
-    pub fn set_gain(&mut self, value: u16) -> Result<(), IError> {
+    fn set_gain(&mut self, value: u16) -> Result<(), IError> {
         let data = MainBuilder::default()
             .write(WriteMode::Gain)
             .address(ChannelAddress::AllCh)
             .data(value)
             .build();
-        self.spi.spi_write(&data)
+        self.send_data(&data)?;
+        Ok(())
     }
 
-    pub fn set_offset(&mut self, value: u16) -> Result<(), IError> {
+    fn set_offset(&mut self, value: u16) -> Result<(), IError> {
         let data = MainBuilder::default()
             .write(WriteMode::Offset)
             .address(ChannelAddress::AllCh)
             .data(value)
             .build();
-        self.spi.spi_write(&data)
+        self.send_data(&data)?;
+        Ok(())
+    }
+
+    fn voltage_to_input(&self, vol: f64, group: u8, ch: u8) -> u16 {
+        let vs = 0.0;
+        let k1 = 1_u32 << 16_u32;
+        let k2 = 1_u16 << 15_u16;
+        let reg = self.get_reg();
+        let ofs: u16 = match group {
+            0 => reg.ofs0,
+            _ => reg.ofs1,
+        };
+        let idx = (group * 8 + ch) as usize;
+        let c = reg.offset[idx];
+        let m = reg.gain[idx];
+
+        let first_item = (vol - vs) * (k1 as f64) / (4.0 * self.get_vref());
+        let suffix = (4 * ofs + k2 - c) as f64;
+        let coef = (k1 as f64 / (m + 1) as f64) as f64;
+
+        ((first_item + suffix) * coef).round() as u16
     }
 
     #[allow(dead_code)]
-    pub fn read_all(&mut self) -> Result<(), IError> {
+    fn read_all(&mut self) -> Result<(), IError> {
         let mut builder = MainBuilder::default();
+        let mut reg = self.get_reg();
         for group in 0..5 {
             for ch in 0..8 {
                 let prefix: [[u8; 3]; 4] = [
@@ -154,32 +142,103 @@ impl<'a> AD5370<'a> {
                 let mut data: [ReadResp; 4] = [ReadResp::new(); 4];
                 let name = ["X1A", "X1B", "C", "M"];
                 for item in 0..4 {
-                    self.spi.spi_read(&prefix[item], data[item].as_mut())?;
+                    self.read_register(&prefix[item], data[item].as_mut())?;
                     println!(
                         "read reg (group:{},ch:{}){} , value:{:}",
                         group, ch, name[item], &data[item]
                     );
                 }
-                self.reg.x1_a[ch as usize] = data[0].to_u16();
-                self.reg.x1_b[ch as usize] = data[1].to_u16();
-                self.reg.offset[ch as usize] = data[2].to_u16();
-                self.reg.gain[ch as usize] = data[3].to_u16();
+                reg.x1_a[ch as usize] = data[0].to_u16();
+                reg.x1_b[ch as usize] = data[1].to_u16();
+                reg.offset[ch as usize] = data[2].to_u16();
+                reg.gain[ch as usize] = data[3].to_u16();
             }
         }
 
         let mut data = ReadResp::new();
 
         let mut prefix: [u8; 3] = builder.read(ReadBackAddr::OFS0).build();
-        self.spi.spi_read(&prefix, data.as_mut())?;
-        self.reg.ofs0 = data.to_u16();
+
+        self.read_register(&prefix, data.as_mut())?;
+        reg.ofs0 = data.to_u16();
         println!("read reg ofs0, value:{:}", &data);
 
         prefix = (*builder.read(ReadBackAddr::OFS1)).build();
-        self.spi.spi_read(&prefix, data.as_mut())?;
-        self.reg.ofs1 = data.to_u16();
+        self.read_register(&prefix, data.as_mut())?;
+        reg.ofs1 = data.to_u16();
         println!("read reg ofs1, value:{:}", &data);
 
-        self.spi.spi_read(&prefix, data.as_mut())?;
+        self.read_register(&prefix, data.as_mut())?;
+        //TODO set_reg here
+        Ok(())
+    }
+}
+
+impl<E, R> AD5370Instance for AD5370<E, R>
+where
+    IError: From<E>,
+    IError: From<R>,
+{
+    fn init(&mut self) -> Result<(), IError> {
+        //TODO: use button on the EVAL board for now. please keep LK3 connected.
+        // self._reset.reset();
+        // sleep(Duration::from_millis(1));
+        // self._reset.set()?;
+
+        self._clr.set_high()?;
+        self._ldac.set_high()?;
+        Ok(())
+    }
+    fn reset(&mut self) -> Result<(), IError> {
+        self._reset.set_low()?;
+        self._reset.set_high()?;
+        Ok(())
+    }
+    // On the rising
+    // edge of RESET, the AD5370 state machine initiates a reset
+    // sequence to reset the X, M, and C registers to their default
+    // values.
+
+    fn clear(&mut self) -> Result<(), IError> {
+        self._clr.set_low()?;
+        Ok(())
+    }
+    fn get_reg(&self) -> Register {
+        self.reg
+    }
+
+    fn get_vref(&self) -> f64 {
+        self.vref
+    }
+
+    fn send_data(&mut self, data: &[u8; 3]) -> Result<(), IError> {
+        for byte in data {
+            self._spi.send(*byte).map_err(|_x| IError::General {
+                msg: "unknown spi write",
+            })?;
+        }
+        Ok(())
+    }
+
+    fn read_register(&mut self, addr: &[u8; 3], dest: &mut [u8]) -> Result<(), IError> {
+        self.send_data(addr)?;
+        for i in dest {
+            self._spi.send(0x00).map_err(|_x| IError::General {
+                msg: "unknown spi write",
+            })?;
+            *i = self._spi.read().map_err(|_x| IError::General {
+                msg: "unknown spi read",
+            })?;
+        }
+        Ok(())
+    }
+
+    fn set_ldac(&mut self) -> Result<(), IError> {
+        self._ldac.set_high()?;
+        Ok(())
+    }
+    fn clear_ldac(&mut self) -> Result<(), IError> {
+        self._ldac.set_low()?;
         Ok(())
     }
 }

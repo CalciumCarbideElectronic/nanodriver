@@ -3,15 +3,12 @@ use std::{
     marker::{Send, Sync},
 };
 
-use self::driver::AD5370;
-
 pub mod builder;
 pub mod driver;
 pub mod labview;
 pub mod reg;
 mod utils;
 
-pub type Instance<'a> = AD5370<'a>;
 type AD5370PerChannelRegister = [u16; 40];
 #[derive(Clone, Copy, Debug)]
 struct ReadResp([u8; 3]);

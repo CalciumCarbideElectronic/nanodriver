@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use std::sync::Mutex;
 
-use crate::dac::ad537x::Instance;
+use crate::dac::ad537x::driver::AD5370Instance;
 
 #[post("/ping")]
 pub async fn ping() -> Result<HttpResponse> {
@@ -29,7 +29,7 @@ pub struct SetVoltageReq {
 
 #[post("/voltage")]
 pub async fn voltage(
-    ins: web::Data<Mutex<Instance<'_>>>,
+    ins: web::Data<Mutex<Box<dyn AD5370Instance>>>,
     req: web::Json<SetVoltageReq>,
 ) -> Result<String, crate::error::IError> {
     // let mut m = ins.reset();

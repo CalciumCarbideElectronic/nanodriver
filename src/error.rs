@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display};
+use std::{convert::Infallible, error::Error, fmt::Display};
 
 use actix_web::ResponseError;
 use libftd2xx::TimeoutError;
@@ -36,5 +36,29 @@ impl From<TimeoutError> for IError {
 impl ResponseError for IError {
     fn status_code(&self) -> actix_web::http::StatusCode {
         actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
+impl From<Infallible> for IError {
+    fn from(_: Infallible) -> Self {
+        Self::General {
+            msg: "Infallible error",
+        }
+    }
+}
+
+impl From<()> for IError {
+    fn from(_: ()) -> Self {
+        Self::General {
+            msg: "unknown error",
+        }
+    }
+}
+
+impl From<rppal::spi::Error> for IError {
+    fn from(_: rppal::spi::Error) -> Self {
+        Self::General {
+            msg: "rapspberry pi spi error",
+        }
     }
 }

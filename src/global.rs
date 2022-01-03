@@ -1,16 +1,18 @@
 #![allow(dead_code)]
+use crate::dac::ad537x::driver::AD5370Instance;
 use crate::{
     dac::ad537x::{driver::AD5370, reg::Register},
-    interface::ftdi::gpio::FtdiGPIOController,
-    interface::ftdi::spi::FtdiSPIController,
     log::log,
     sin::{Action, SinExeciter},
 };
-use embedded_hal::{digital::v2::OutputPin, spi::Polarity};
 use ftdi_embedded_hal as hal;
 use hal::{FtHal, Initialized};
 use libftd2xx::{Ft4232h, MpsseSettings};
 use once_cell::sync::Lazy;
+use rppal::{
+    gpio::Gpio,
+    spi::{Bus, Spi},
+};
 use std::{
     sync::mpsc::{self, SyncSender},
     thread::{self, JoinHandle},
@@ -35,28 +37,43 @@ pub static FTDI: Lazy<FtHal<Ft4232h, Initialized>> = Lazy::new(|| {
     ftdi
 });
 
-pub static GLOBAL_AD5370: Lazy<Mutex<AD5370>> = Lazy::new(|| {
-    let mut _spi = FTDI.spi().unwrap();
-    _spi.set_clock_polarity(Polarity::IdleLow);
+// pub static GLOBAL_AD5370: Lazy<Mutex<AD5370FDTD>> = Lazy::new(|| {
+//     let mut _spi = FTDI.spi().unwrap();
+//     _spi.set_clock_polarity(Polarity::IdleLow);
 
-    let mut spi = Box::new(FtdiSPIController {
-        _spi,
-        _cs: FTDI.ad3(),
-    });
-    spi._cs.set_high().unwrap();
-    let mut _busy = FtdiGPIOController::new_boxed(FTDI.ad4());
-    let mut _ldac = FtdiGPIOController::new_boxed(FTDI.ad5());
-    let mut _reset = FtdiGPIOController::new_boxed(FTDI.ad6());
-    let mut _clr = FtdiGPIOController::new_boxed(FTDI.ad7());
-    let mut t = AD5370 {
+//     let mut t = AD5370 {
+//         vref: 4.0,
+//         reg: Register::default(),
+//         _spi: Box::new(_spi),
+//         _busy: Box::new(FTDI.ad4()),
+//         _ldac: Box::new(FTDI.ad5()),
+//         _reset: Box::new(FTDI.ad6()),
+//         _clr: Box::new(FTDI.ad7()),
+//     };
+//     t.init().unwrap();
+//     Mutex::new(t)
+// });
+
+#[cfg(feature = "raspberry")]
+pub static GLOBAL_AD5370: Lazy<Mutex<Box<dyn AD5370Instance>>> = Lazy::new(|| {
+    let _spi = Spi::new(
+        Bus::Spi0,
+        rppal::spi::SlaveSelect::Ss0,
+        1000,
+        rppal::spi::Mode::Mode0,
+    )
+    .unwrap();
+    let _io = Gpio::new().unwrap();
+
+    let mut t = Box::new(AD5370 {
         vref: 4.0,
         reg: Register::default(),
-        spi,
-        _busy,
-        _ldac,
-        _reset,
-        _clr,
-    };
+        _spi: Box::new(_spi),
+        _busy: Box::new(_io.get(27).unwrap().into_input_pulldown()),
+        _ldac: Box::new(_io.get(27).unwrap().into_output()),
+        _reset: Box::new(_io.get(27).unwrap().into_output()),
+        _clr: Box::new(_io.get(27).unwrap().into_output()),
+    });
     t.init().unwrap();
     Mutex::new(t)
 });
